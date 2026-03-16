@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Калькулятор материала для каркасной стены с визуализацией чертежа">
+    <title>Калькулятор каркасной стены</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app">
+        <header class="header">
+            <h1>Калькулятор каркасной стены</h1>
+            <p class="header__subtitle">Расчёт материала и визуализация конструкции</p>
+        </header>
+
+        <main class="main">
+            <section class="panel panel--form">
+                <h2 class="panel__title">Параметры стены</h2>
+                <form id="wallForm" class="form">
+                    <div class="form__group">
+                        <label class="form__label" for="wallLength">Длина стены, мм</label>
+                        <input class="form__input" type="number" id="wallLength" value="6000" min="500" step="1" required>
+                    </div>
+                    <div class="form__group">
+                        <label class="form__label" for="wallHeight">Высота стены, мм</label>
+                        <input class="form__input" type="number" id="wallHeight" value="2800" min="500" step="1" required>
+                    </div>
+                    <div class="form__group">
+                        <label class="form__label" for="studSpacing">Шаг стоек, мм</label>
+                        <input class="form__input" type="number" id="studSpacing" value="575" min="100" step="1" required>
+                    </div>
+                    <div class="form__group">
+                        <label class="form__label" for="boardWidth">Ширина доски, мм</label>
+                        <input class="form__input" type="number" id="boardWidth" value="150" min="50" step="1" required>
+                    </div>
+                    <div class="form__group">
+                        <label class="form__label" for="boardThickness">Толщина доски, мм</label>
+                        <input class="form__input" type="number" id="boardThickness" value="50" min="20" step="1" required>
+                    </div>
+                    <div class="form__group form__group--checkbox">
+                        <label class="form__checkbox-label">
+                            <input class="form__checkbox" type="checkbox" id="doubleTopPlate" checked>
+                            <span>Двойная верхняя обвязка</span>
+                        </label>
+                    </div>
+                    <div class="form__group form__group--checkbox">
+                        <label class="form__checkbox-label">
+                            <input class="form__checkbox" type="checkbox" id="hasRigel">
+                            <span>Ригель</span>
+                        </label>
+                    </div>
+                    <div class="form__group">
+                        <label class="form__label" for="boardPrice">Стоимость доски 6м, ₽ (опционально)</label>
+                        <input class="form__input" type="number" id="boardPrice" value="" min="0" step="1" placeholder="не указана">
+                    </div>
+                    <button class="btn btn--primary" type="submit" id="calculateBtn">Рассчитать</button>
+                </form>
+            </section>
+
+            <section class="panel panel--openings">
+                <div class="panel__header">
+                    <h2 class="panel__title" style="margin-bottom:0; padding-bottom:0; border-bottom:none;">Проёмы (двери и окна)</h2>
+                    <button class="btn btn--add" type="button" id="addOpeningBtn">+ Добавить проём</button>
+                </div>
+                <div id="openingsList" class="openings-list"></div>
+            </section>
+
+            <section class="panel panel--result" id="resultPanel" style="display:none;">
+                <h2 class="panel__title">Чертёж стены</h2>
+                <div class="drawing-container" id="drawingContainer"></div>
+
+                <div class="drawing-legend">
+                    <h3 class="drawing-legend__title">Пояснения к чертежу</h3>
+                    <ul class="drawing-legend__list">
+                        <li><strong>Шаг стоек</strong> - расстояние между осями (центрами) стоек. Чистый просвет между стойками = шаг - толщина доски.</li>
+                        <li><strong>Шкала снизу</strong> - кумулятивные размеры от левого нижнего угла стены (мм).</li>
+                        <li><strong>Отступ проёма слева</strong> - расстояние от левого края стены до левого края проёма.</li>
+                        <li><strong>Отступ проёма снизу</strong> - расстояние от верха нижней обвязки до низа проёма (для дверей всегда 0).</li>
+                        <li><strong>Высота стоек</strong> - высота стены за вычетом нижней и верхней обвязки.</li>
+                    </ul>
+                </div>
+
+                <div class="drawing-legend" id="assemblyGuide" style="display:none;">
+                </div>
+
+                <div class="drawing-container" id="cuttingContainer" style="display:none;"></div>
+
+                <div id="estimateContainer" style="display:none;"></div>
+
+                <div class="spec" id="specContainer"></div>
+            </section>
+        </main>
+
+        <footer class="footer">
+            <p>&copy; 2026 - Калькулятор каркасной стены</p>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
