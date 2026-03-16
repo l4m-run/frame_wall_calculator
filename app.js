@@ -161,9 +161,8 @@ function calculateWall(params) {
     const plateLength = wallLength;
 
     // Обработка проёмов
-    const processedOpenings = (params.openings || []).map(o => {
-        const offsetY = o.type === 'door' ? 0 : o.offsetY;
-        return { ...o, offsetY };
+    const processedOpenings = (params.openings || []).map(o =\u003e {
+        return { ...o };
     });
 
     // Дополнительные стойки для проёмов (по 2 на каждый проём - обрамление)
