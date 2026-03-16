@@ -161,7 +161,7 @@ function calculateWall(params) {
     const plateLength = wallLength;
 
     // Обработка проёмов
-    const processedOpenings = (params.openings || []).map(o =\u003e {
+    const processedOpenings = (params.openings || []).map(o => {
         return { ...o };
     });
 
@@ -171,8 +171,8 @@ function calculateWall(params) {
     const headerCount = processedOpenings.length;
     // Ригели проёмов - опционально (доска на ребро над проёмом)
     const openingRigelCount = processedOpenings.filter(o => o.hasRigel).length;
-    // Подоконники - только для окон
-    const sillCount = processedOpenings.filter(o => o.type === 'window').length;
+    // Нижняя доска проёма - для любого проёма с отступом снизу
+    const sillCount = processedOpenings.filter(o => o.offsetY > 0).length;
 
     // Общее кол-во стоек (основные + обрамление проёмов)
     const totalStudCount = studCount + openingStuds;
@@ -203,10 +203,10 @@ function calculateWall(params) {
         }
     }
 
-    // Подоконники
+    // Нижняя доска проёмов (подоконники и пороги)
     let sillVolume = 0;
     for (const o of processedOpenings) {
-        if (o.type === 'window') {
+        if (o.offsetY > 0) {
             sillVolume += (boardThickness / 1000) * (boardWidth / 1000) * (o.width / 1000);
         }
     }
@@ -230,7 +230,7 @@ function calculateWall(params) {
         if (o.hasRigel) {
             openingCuts.push({ length: o.width, label: 'Ригель' });
         }
-        if (o.type === 'window') {
+        if (o.offsetY > 0) {
             openingCuts.push({ length: o.width, label: 'Подоконник' });
         }
     }
@@ -267,7 +267,7 @@ function calculateWall(params) {
     for (const o of processedOpenings) {
         headerBoards++;
         if (o.hasRigel) openingRigelBoards++;
-        if (o.type === 'window') sillBoards++;
+        if (o.offsetY > 0) sillBoards++;
     }
 
     const totalBoards = studBoards + plateBoards + rigelBoards + openingBoards;
@@ -677,8 +677,8 @@ function renderWallSVG(result) {
             drawBoard(svg, opX - sBT, opY - sBT - orH, opW + sBT * 2, orH, '#a07040');
         }
 
-        // Подоконник (для окна - снизу проёма)
-        if (op.type === 'window') {
+        // Нижняя доска проёма (подоконник/порог - при отступе снизу)
+        if (op.offsetY > 0) {
             drawBoard(svg, opX - sBT, opY + opH, opW + sBT * 2, sBT, '#b08550');
         }
 
