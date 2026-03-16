@@ -21,66 +21,78 @@
             <section class="panel panel--form">
                 <h2 class="panel__title">Параметры стены</h2>
                 <form id="wallForm" class="form">
-                    <div class="form__group">
-                        <label class="form__label" for="wallLength">Длина стены, мм</label>
-                        <input class="form__input" type="number" id="wallLength" value="6000" min="500" step="1" required>
-                    </div>
-                    <div class="form__group">
-                        <label class="form__label" for="wallHeight">Высота стены, мм</label>
-                        <input class="form__input" type="number" id="wallHeight" value="2800" min="500" step="1" required>
-                    </div>
-                    <div class="form__group">
-                        <label class="form__label" for="studSpacing">Шаг стоек (просвет), мм</label>
-                        <input class="form__input" type="number" id="studSpacing" value="575" min="100" step="1" required>
-                    </div>
-                    <div class="form__group">
-                        <label class="form__label" for="boardWidth">Ширина доски, мм</label>
-                        <input class="form__input" type="number" id="boardWidth" value="150" min="50" step="1" required>
-                    </div>
-                    <div class="form__group">
-                        <label class="form__label" for="boardThickness">Толщина доски, мм</label>
-                        <input class="form__input" type="number" id="boardThickness" value="50" min="20" step="1" required>
-                    </div>
-                    <div class="form__group form__group--checkbox">
-                        <label class="form__checkbox-label">
-                            <input class="form__checkbox" type="checkbox" id="doubleTopPlate" checked>
-                            <span>Двойная верхняя обвязка</span>
-                        </label>
-                    </div>
-                    <div class="form__group form__group--checkbox">
-                        <label class="form__checkbox-label">
-                            <input class="form__checkbox" type="checkbox" id="hasRigel">
-                            <span>Ригель</span>
-                        </label>
-                    </div>
-                    <div class="form__group form__group--checkbox">
-                        <label class="form__checkbox-label">
-                            <input class="form__checkbox" type="checkbox" id="hasSheathing">
-                            <span>Обшивка листовым материалом</span>
-                        </label>
-                    </div>
-                    <div class="sheathing-fields" id="sheathingFields" style="display:none;">
-                        <div class="form__group">
-                            <label class="form__label" for="sheetName">Название материала</label>
-                            <input class="form__input" type="text" id="sheetName" value="ОСБ">
+                    <fieldset class="form__section">
+                        <legend class="form__section-title">Каркас</legend>
+                        <div class="form__section-grid">
+                            <div class="form__group">
+                                <label class="form__label" for="wallLength">Длина стены, мм</label>
+                                <input class="form__input" type="number" id="wallLength" value="6000" min="500" step="1" required>
+                            </div>
+                            <div class="form__group">
+                                <label class="form__label" for="wallHeight">Высота стены, мм</label>
+                                <input class="form__input" type="number" id="wallHeight" value="2800" min="500" step="1" required>
+                            </div>
+                            <div class="form__group">
+                                <label class="form__label" for="studSpacing">Шаг стоек (просвет), мм</label>
+                                <input class="form__input" type="number" id="studSpacing" value="575" min="100" step="1" required>
+                            </div>
+                            <div class="form__group">
+                                <label class="form__label" for="boardWidth">Ширина доски, мм</label>
+                                <input class="form__input" type="number" id="boardWidth" value="150" min="50" step="1" required>
+                            </div>
+                            <div class="form__group">
+                                <label class="form__label" for="boardThickness">Толщина доски, мм</label>
+                                <input class="form__input" type="number" id="boardThickness" value="50" min="20" step="1" required>
+                            </div>
+                            <div class="form__group form__group--checkbox">
+                                <label class="form__checkbox-label">
+                                    <input class="form__checkbox" type="checkbox" id="doubleTopPlate" checked>
+                                    <span>Двойная верхняя обвязка</span>
+                                </label>
+                            </div>
+                            <div class="form__group form__group--checkbox">
+                                <label class="form__checkbox-label">
+                                    <input class="form__checkbox" type="checkbox" id="hasRigel">
+                                    <span>Ригель</span>
+                                </label>
+                            </div>
+                            <div class="form__group">
+                                <label class="form__label" for="boardPrice">Стоимость доски 6м, ₽ (опционально)</label>
+                                <input class="form__input" type="number" id="boardPrice" value="" min="0" step="1" placeholder="не указана">
+                            </div>
                         </div>
-                        <div class="form__group">
-                            <label class="form__label" for="sheetHeight">Высота листа, мм</label>
-                            <input class="form__input" type="number" id="sheetHeight" value="2500" min="100" step="1">
+                    </fieldset>
+
+                    <fieldset class="form__section">
+                        <legend class="form__section-title">Обшивка плитным материалом</legend>
+                        <div class="form__section-grid">
+                            <div class="form__group form__group--checkbox">
+                                <label class="form__checkbox-label">
+                                    <input class="form__checkbox" type="checkbox" id="hasSheathing">
+                                    <span>Включить обшивку</span>
+                                </label>
+                            </div>
+                            <div class="sheathing-fields" id="sheathingFields" style="display:none;">
+                                <div class="form__group">
+                                    <label class="form__label" for="sheetName">Название материала</label>
+                                    <input class="form__input" type="text" id="sheetName" value="ОСБ">
+                                </div>
+                                <div class="form__group">
+                                    <label class="form__label" for="sheetHeight">Высота листа, мм</label>
+                                    <input class="form__input" type="number" id="sheetHeight" value="2500" min="100" step="1">
+                                </div>
+                                <div class="form__group">
+                                    <label class="form__label" for="sheetWidth">Ширина листа, мм</label>
+                                    <input class="form__input" type="number" id="sheetWidth" value="1250" min="100" step="1">
+                                </div>
+                                <div class="form__group">
+                                    <label class="form__label" for="sheetPrice">Стоимость листа, ₽ (опционально)</label>
+                                    <input class="form__input" type="number" id="sheetPrice" value="" min="0" step="1" placeholder="не указана">
+                                </div>
+                            </div>
                         </div>
-                        <div class="form__group">
-                            <label class="form__label" for="sheetWidth">Ширина листа, мм</label>
-                            <input class="form__input" type="number" id="sheetWidth" value="1250" min="100" step="1">
-                        </div>
-                        <div class="form__group">
-                            <label class="form__label" for="sheetPrice">Стоимость листа, ₽ (опционально)</label>
-                            <input class="form__input" type="number" id="sheetPrice" value="" min="0" step="1" placeholder="не указана">
-                        </div>
-                    </div>
-                    <div class="form__group">
-                        <label class="form__label" for="boardPrice">Стоимость доски 6м, ₽ (опционально)</label>
-                        <input class="form__input" type="number" id="boardPrice" value="" min="0" step="1" placeholder="не указана">
-                    </div>
+                    </fieldset>
+
                     <button class="btn btn--primary" type="submit" id="calculateBtn">Рассчитать</button>
                 </form>
             </section>
