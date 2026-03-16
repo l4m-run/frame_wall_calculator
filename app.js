@@ -65,8 +65,15 @@ function createOpeningCard(opening) {
             if (field === 'type') {
                 o.type = el.value;
                 if (el.value === 'door') {
-                    o.offsetY = 0;
+                    o.width = 1000; o.height = 2100; o.offsetY = 0;
+                    card.querySelector('[data-field="width"]').value = '1000';
+                    card.querySelector('[data-field="height"]').value = '2100';
                     card.querySelector('[data-field="offsetY"]').value = '0';
+                } else {
+                    o.width = 1200; o.height = 1000; o.offsetY = 800;
+                    card.querySelector('[data-field="width"]').value = '1200';
+                    card.querySelector('[data-field="height"]').value = '1000';
+                    card.querySelector('[data-field="offsetY"]').value = '800';
                 }
             } else if (field === 'hasRigel') {
                 o.hasRigel = el.checked;
