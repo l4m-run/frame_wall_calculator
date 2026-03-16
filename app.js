@@ -116,16 +116,22 @@ function updateOpeningsPlaceholder() {
  * @param {object} params - входные параметры
  * @param {number} params.wallLength - длина стены, мм
  * @param {number} params.wallHeight - высота стены, мм
- * @param {number} params.studSpacing - шаг стоек (по осям), мм
+ * @param {number} params.studSpacing - шаг стоек (просвет между стойками), мм
  * @param {number} params.boardWidth - ширина доски (глубина сечения), мм
  * @param {number} params.boardThickness - толщина доски, мм
  * @param {boolean} params.doubleTopPlate - двойная верхняя обвязка
  * @param {boolean} params.hasRigel - ригель (доска на ребро, врезается в стойки)
  * @param {Array} params.openings - список проёмов
+ * @param {boolean} [params.hasSheathing] - обшивка листовым материалом
+ * @param {string} [params.sheetName] - название материала обшивки
+ * @param {number} [params.sheetHeight] - высота листа, мм
+ * @param {number} [params.sheetWidth] - ширина листа, мм
  * @returns {object} результат расчёта
  */
 function calculateWall(params) {
-    const { wallLength, wallHeight, studSpacing, boardWidth, boardThickness, doubleTopPlate, hasRigel } = params;
+    let { wallLength, wallHeight, studSpacing, boardWidth, boardThickness, doubleTopPlate, hasRigel } = params;
+
+
 
     // Высота стоек = высота стены - нижняя обвязка - верхняя обвязка
     const bottomPlateHeight = boardThickness; // нижняя обвязка (1 слой)
@@ -134,14 +140,14 @@ function calculateWall(params) {
     const studHeight = wallHeight - bottomPlateHeight - topPlateHeight;
 
     // Расчёт стоек: первая и последняя стойка на краях стены,
-    // промежуточные с заданным шагом (по осям)
+    // промежуточные с заданным шагом (просвет между стойками)
     const studs = [];
     studs.push(0);
 
-    let pos = studSpacing;
+    let pos = boardThickness + studSpacing;
     while (pos < wallLength - boardThickness) {
         studs.push(pos);
-        pos += studSpacing;
+        pos += boardThickness + studSpacing;
     }
 
     const lastStudPos = wallLength - boardThickness;
@@ -306,10 +312,77 @@ function calculateWall(params) {
     const nailWeightG = nailLength <= 90 ? 5 : 6.5;
     const nailsWeightKg = Math.round(nailsWithReserve * nailWeightG / 100) / 10;
 
-    // Расстояния между стойками
+    // Просветы между стойками (от правого края одной до левого края следующей)
     const spacings = [];
     for (let i = 1; i < studs.length; i++) {
-        spacings.push(studs[i] - studs[i - 1]);
+        spacings.push(studs[i] - studs[i - 1] - boardThickness);
+    }
+
+    // === Расчёт обшивки листовым материалом ===
+    let sheathing = null;
+    if (params.hasSheathing && params.sheetHeight > 0 && params.sheetWidth > 0) {
+        const sH = params.sheetHeight; // длинная сторона, ставится вертикально
+        const sW = params.sheetWidth;  // короткая сторона, по горизонтали
+
+        const wallAreaMm2 = wallLength * wallHeight;
+        let openingsAreaMm2 = 0;
+        for (const o of processedOpenings) {
+            openingsAreaMm2 += o.width * o.height;
+        }
+        const netAreaMm2 = wallAreaMm2 - openingsAreaMm2;
+        const sheetAreaMm2 = sH * sW;
+
+        // Подрезка первого листа: стык должен попасть на центр стойки
+        // Центры стоек: boardThickness/2 + i * (boardThickness + studSpacing)
+        // Ищем наибольший firstSheetWidth = center_i, при котором firstSheetWidth <= sheetWidth
+        const studStep = boardThickness + studSpacing;
+        let firstSheetWidth = sW; // по умолчанию - полный лист
+        const halfBT = boardThickness / 2;
+        for (let n = Math.floor((sW - halfBT) / studStep); n >= 0; n--) {
+            const candidate = halfBT + n * studStep;
+            if (candidate > 0 && candidate <= sW) {
+                firstSheetWidth = candidate;
+                break;
+            }
+        }
+
+        // Раскладка листов с подрезанным первым листом
+        const rows = Math.ceil(wallHeight / sH);
+
+        /** @type {Array<{col: number, row: number, x: number, y: number, w: number, h: number, idx: number}>} */
+        const sheetLayout = [];
+        let idx = 0;
+        let curX = 0;
+        let col = 0;
+        while (curX < wallLength) {
+            const colWidth = (col === 0) ? firstSheetWidth : sW;
+            const actualW = Math.min(colWidth, wallLength - curX);
+            for (let row = 0; row < rows; row++) {
+                // Снизу вверх: полный лист снизу, подрезка сверху
+                const yFromBottom = row * sH;
+                const actualH = Math.min(sH, wallHeight - yFromBottom);
+                const y = wallHeight - yFromBottom - actualH;
+                sheetLayout.push({ col, row, x: curX, y, w: actualW, h: actualH, idx: ++idx });
+            }
+            curX += actualW;
+            col++;
+        }
+        const cols = col;
+
+        sheathing = {
+            name: params.sheetName || 'ОСБ',
+            sheetHeight: sH,
+            sheetWidth: sW,
+            firstSheetWidth,
+            wallAreaM2: Math.round(wallAreaMm2 / 1e6 * 100) / 100,
+            openingsAreaM2: Math.round(openingsAreaMm2 / 1e6 * 100) / 100,
+            netAreaM2: Math.round(netAreaMm2 / 1e6 * 100) / 100,
+            sheetAreaM2: Math.round(sheetAreaMm2 / 1e6 * 100) / 100,
+            sheetCount: Math.ceil(netAreaMm2 / sheetAreaMm2),
+            sheetLayout,
+            cols,
+            rows,
+        };
     }
 
     return {
@@ -365,6 +438,8 @@ function calculateWall(params) {
         nailsOpeningRigels,
         nailsSills,
         nailsWallRigel,
+        // Обшивка
+        sheathing,
     };
 }
 
@@ -653,9 +728,10 @@ function renderWallSVG(result) {
     const dimHorizY = oY + sH + 18;
 
     for (let i = 0; i < studs.length - 1; i++) {
-        const x1 = oX + studs[i] * scale + sBT / 2;
-        const x2 = oX + studs[i + 1] * scale + sBT / 2;
-        const spacing = studs[i + 1] - studs[i];
+        // Размер от правого края текущей стойки до левого края следующей (просвет)
+        const x1 = oX + (studs[i] + boardThickness) * scale;
+        const x2 = oX + studs[i + 1] * scale;
+        const spacing = studs[i + 1] - studs[i] - boardThickness;
         drawDimension(svg, x1, dimHorizY, x2, dimHorizY, `${spacing}`, 'h');
     }
 
@@ -933,6 +1009,25 @@ function renderSpec(result) {
         }
     );
 
+    // === Обшивка ===
+    if (result.sheathing) {
+        const s = result.sheathing;
+        cards.push(
+            {
+                title: `Обшивка (${s.name})`,
+                value: s.netAreaM2,
+                unit: 'м²',
+                detail: `стена ${s.wallAreaM2} м² - проёмы ${s.openingsAreaM2} м²`
+            },
+            {
+                title: `Листы ${s.name}`,
+                value: s.sheetCount,
+                unit: 'шт.',
+                detail: `${s.sheetHeight}x${s.sheetWidth} мм (${s.sheetAreaM2} м²/лист)`
+            }
+        );
+    }
+
     return cards.map(c => `
         <div class="spec__card">
             <div class="spec__card-title">${c.title}</div>
@@ -964,15 +1059,13 @@ function renderAssemblyGuide(result) {
     const hasWindows = openings.some(o => o.type === 'window');
     const hasOpeningRigels = openings.some(o => o.hasRigel);
     const hasOpenings = openings.length > 0;
-    const clearance = studSpacing - boardThickness;
-
     // === Порядок сборки ===
     let step = 1;
     const steps = [];
 
     steps.push(`<strong>${step++}. Нижняя обвязка.</strong> Уложите доску ${boardThickness}x${boardWidth} мм плашмя по всей длине стены. Крепить к основанию анкерными болтами или глухарями.`);
 
-    steps.push(`<strong>${step++}. Разметка стоек.</strong> Отметьте на нижней обвязке позиции стоек с шагом ${studSpacing} мм по осям. Чистый просвет между стойками составит ${clearance} мм.`);
+    steps.push(`<strong>${step++}. Разметка стоек.</strong> Отметьте на нижней обвязке позиции стоек с просветом ${studSpacing} мм (расстояние между стойками в свету). Шаг по осям (от центра до центра) составит ${studSpacing + boardThickness} мм.`);
 
     if (hasRigel) {
         steps.push(`<strong>${step++}. Подготовка стоек под ригель.</strong> В каждой стойке сделайте выборку (пропил) под ригель: глубина = ${boardThickness} мм, высота = ${boardWidth} мм. Выборка делается в верхней части стойки.`);
@@ -1209,6 +1302,404 @@ function renderCuttingPlan(result) {
 
 
 // ============================================================
+// Модуль раскроя обшивки
+// ============================================================
+
+/**
+ * Рисует SVG-схему раскладки листов обшивки на стене
+ * @param {object} result - результат расчёта
+ * @returns {SVGElement|null}
+ */
+function renderSheathingLayout(result) {
+    const { sheathing, wallLength, wallHeight, openings } = result;
+    if (!sheathing || !sheathing.sheetLayout) return null;
+
+    const { sheetLayout, sheetHeight, sheetWidth, name, cols, rows: rowCount } = sheathing;
+
+    const NS = 'http://www.w3.org/2000/svg';
+    const marginLeft = 50;
+    const marginRight = 20;
+    const marginTop = 36;
+    const marginBottom = 20;
+    const maxDrawW = 800;
+
+    const scale = Math.min((maxDrawW - marginLeft - marginRight) / wallLength, 0.4);
+    const sW = wallLength * scale;
+    const sH = wallHeight * scale;
+
+    const svgW = marginLeft + sW + marginRight;
+    const svgH = marginTop + sH + marginBottom;
+
+    const svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('viewBox', `0 0 ${svgW} ${svgH}`);
+    svg.setAttribute('width', '100%');
+    svg.style.maxWidth = svgW + 'px';
+
+    // Фон
+    const bg = document.createElementNS(NS, 'rect');
+    bg.setAttribute('width', svgW);
+    bg.setAttribute('height', svgH);
+    bg.setAttribute('fill', '#ffffff');
+    svg.appendChild(bg);
+
+    // Заголовок
+    const title = document.createElementNS(NS, 'text');
+    title.setAttribute('x', svgW / 2);
+    title.setAttribute('y', 18);
+    title.setAttribute('text-anchor', 'middle');
+    title.setAttribute('font-size', '13');
+    title.setAttribute('font-weight', '600');
+    title.setAttribute('font-family', 'Inter, sans-serif');
+    title.setAttribute('fill', '#333');
+    title.textContent = `Раскладка ${name} на стене`;
+    svg.appendChild(title);
+
+    const oX = marginLeft;
+    const oY = marginTop;
+
+    // Контур стены
+    const wallRect = document.createElementNS(NS, 'rect');
+    wallRect.setAttribute('x', oX);
+    wallRect.setAttribute('y', oY);
+    wallRect.setAttribute('width', sW);
+    wallRect.setAttribute('height', sH);
+    wallRect.setAttribute('fill', '#fafafa');
+    wallRect.setAttribute('stroke', '#333');
+    wallRect.setAttribute('stroke-width', '1.5');
+    svg.appendChild(wallRect);
+
+    // Палитра цветов для чередования листов
+    const sheetColors = [
+        'rgba(180, 210, 140, 0.55)',
+        'rgba(140, 190, 210, 0.55)',
+        'rgba(210, 180, 140, 0.55)',
+        'rgba(170, 160, 210, 0.55)',
+    ];
+
+    // Листы
+    for (const sheet of sheetLayout) {
+        const sx = oX + sheet.x * scale;
+        const sy = oY + sheet.y * scale;
+        const sw = sheet.w * scale;
+        const sh = sheet.h * scale;
+        const colorIdx = (sheet.col + sheet.row) % sheetColors.length;
+
+        // Прямоугольник листа
+        const rect = document.createElementNS(NS, 'rect');
+        rect.setAttribute('x', sx);
+        rect.setAttribute('y', sy);
+        rect.setAttribute('width', sw);
+        rect.setAttribute('height', sh);
+        rect.setAttribute('fill', sheetColors[colorIdx]);
+        rect.setAttribute('stroke', '#666');
+        rect.setAttribute('stroke-width', '0.8');
+        svg.appendChild(rect);
+
+        // Номер листа
+        if (sw > 20 && sh > 20) {
+            const numText = document.createElementNS(NS, 'text');
+            numText.setAttribute('x', sx + sw / 2);
+            numText.setAttribute('y', sy + sh / 2 - 4);
+            numText.setAttribute('text-anchor', 'middle');
+            numText.setAttribute('font-size', '11');
+            numText.setAttribute('font-weight', '700');
+            numText.setAttribute('font-family', 'Inter, sans-serif');
+            numText.setAttribute('fill', '#333');
+            numText.textContent = `#${sheet.idx}`;
+            svg.appendChild(numText);
+
+            // Размер листа
+            const isCut = (sheet.w < sheetWidth) || (sheet.h < sheetHeight);
+            if (sw > 40 && sh > 35) {
+                const sizeText = document.createElementNS(NS, 'text');
+                sizeText.setAttribute('x', sx + sw / 2);
+                sizeText.setAttribute('y', sy + sh / 2 + 10);
+                sizeText.setAttribute('text-anchor', 'middle');
+                sizeText.setAttribute('font-size', '8');
+                sizeText.setAttribute('font-family', 'Inter, sans-serif');
+                sizeText.setAttribute('fill', isCut ? '#c0392b' : '#666');
+                sizeText.textContent = `${sheet.w}x${sheet.h}`;
+                svg.appendChild(sizeText);
+            }
+        }
+    }
+
+    // Проёмы поверх листов
+    for (const op of openings) {
+        const opX = oX + op.offsetX * scale;
+        // offsetY от низа стены
+        const opY = oY + (wallHeight - op.offsetY - op.height) * scale;
+        const opW = op.width * scale;
+        const opH = op.height * scale;
+
+        const opRect = document.createElementNS(NS, 'rect');
+        opRect.setAttribute('x', opX);
+        opRect.setAttribute('y', opY);
+        opRect.setAttribute('width', opW);
+        opRect.setAttribute('height', opH);
+        opRect.setAttribute('fill', '#ffffff');
+        opRect.setAttribute('stroke', op.type === 'door' ? '#8B4513' : '#4682B4');
+        opRect.setAttribute('stroke-width', '1.2');
+        opRect.setAttribute('stroke-dasharray', '4,2');
+        svg.appendChild(opRect);
+
+        // Подпись проёма
+        const opLabel = document.createElementNS(NS, 'text');
+        opLabel.setAttribute('x', opX + opW / 2);
+        opLabel.setAttribute('y', opY + opH / 2 + 4);
+        opLabel.setAttribute('text-anchor', 'middle');
+        opLabel.setAttribute('font-size', '9');
+        opLabel.setAttribute('font-family', 'Inter, sans-serif');
+        opLabel.setAttribute('fill', op.type === 'door' ? '#8B4513' : '#4682B4');
+        opLabel.textContent = op.type === 'door' ? 'Дверь' : 'Окно';
+        svg.appendChild(opLabel);
+    }
+
+    // Размерные подписи: ширина и высота стены
+    // Ширина снизу
+    const dimY = oY + sH + 14;
+    drawDimension(svg, oX, dimY, oX + sW, dimY, `${wallLength}`, 'h');
+
+    // Высота слева
+    const dimX = oX - 20;
+    drawDimension(svg, dimX, oY, dimX, oY + sH, `${wallHeight}`, 'v');
+
+    return svg;
+}
+
+
+// ============================================================
+// Модуль наложения обшивки на каркас
+// ============================================================
+
+/**
+ * Вычисляет подходящие шаги стоек для данной ширины листа
+ * Стык листа должен попадать на середину стойки (studPos + boardThickness/2).
+ * Условие: (sheetWidth - boardThickness/2) делится на spacing.
+ * @param {number} sheetWidth - ширина листа, мм
+ * @param {number} boardThickness - толщина доски (стойки), мм
+ * @returns {Array<number>} массив подходящих шагов
+ */
+function getSuggestedSpacings(sheetWidth, boardThickness) {
+    const suggestions = [];
+    const target = sheetWidth - boardThickness / 2;
+    const tolerance = 2; // допуск ±2мм
+    // spacing = просвет, шаг по осям = boardThickness + spacing
+    // стык на центре стойки: target % (boardThickness + spacing) ≈ 0
+    for (let spacing = 200; spacing <= 650; spacing += 5) {
+        const step = boardThickness + spacing;
+        const rem = target % step;
+        if (rem <= tolerance || (step - rem) <= tolerance) {
+            suggestions.push(spacing);
+        }
+    }
+    return suggestions;
+}
+
+/**
+ * Рисует SVG-схему наложения листов на каркас стены
+ * @param {object} result - результат расчёта
+ * @returns {{svg: SVGElement, warnings: string[]}|null}
+ */
+function renderSheathingOnFrame(result) {
+    const { sheathing, wallLength, wallHeight, studs, boardThickness, boardWidth,
+        studHeight, topPlateHeight, bottomPlateHeight } = result;
+    if (!sheathing || !sheathing.sheetLayout) return null;
+
+    const { sheetLayout, sheetHeight, sheetWidth, name } = sheathing;
+
+    const NS = 'http://www.w3.org/2000/svg';
+    const marginLeft = 50;
+    const marginRight = 20;
+    const marginTop = 36;
+    const marginBottom = 30;
+    const maxDrawW = 800;
+
+    const scale = Math.min((maxDrawW - marginLeft - marginRight) / wallLength, 0.4);
+    const sW = wallLength * scale;
+    const sH = wallHeight * scale;
+    const sBT = boardThickness * scale;
+
+    const svgW = marginLeft + sW + marginRight;
+    const svgH = marginTop + sH + marginBottom;
+
+    const svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('viewBox', `0 0 ${svgW} ${svgH}`);
+    svg.setAttribute('width', '100%');
+    svg.style.maxWidth = svgW + 'px';
+
+    // Фон
+    svg.appendChild(svgEl('rect', { width: svgW, height: svgH, fill: '#ffffff' }));
+
+    // Заголовок
+    const title = svgEl('text', {
+        x: svgW / 2, y: 18,
+        'text-anchor': 'middle', 'font-size': 13, 'font-weight': 600,
+        'font-family': 'Inter, sans-serif', fill: '#333'
+    });
+    title.textContent = `Наложение ${name} на каркас`;
+    svg.appendChild(title);
+
+    const oX = marginLeft;
+    const oY = marginTop;
+
+    // === Каркас ===
+    // Верхняя обвязка
+    drawBoard(svg, oX, oY, sW, sBT, '#c49a5c');
+    if (result.topPlateCount === 2) {
+        drawBoard(svg, oX, oY + sBT, sW, sBT, '#c49a5c');
+    }
+    // Нижняя обвязка
+    drawBoard(svg, oX, oY + sH - sBT, sW, sBT, '#c49a5c');
+
+    // Стойки
+    const studStartY = oY + topPlateHeight * scale;
+    const sStudH = studHeight * scale;
+    for (const studPos of studs) {
+        const sx = oX + studPos * scale;
+        drawBoard(svg, sx, studStartY, sBT, sStudH, '#d4a76a');
+    }
+
+    // === Листы обшивки поверх каркаса ===
+    const sheetColors = [
+        'rgba(100, 180, 80, 0.25)',
+        'rgba(80, 150, 180, 0.25)',
+        'rgba(180, 140, 80, 0.25)',
+        'rgba(140, 120, 180, 0.25)',
+    ];
+
+    for (const sheet of sheetLayout) {
+        const sx = oX + sheet.x * scale;
+        const sy = oY + sheet.y * scale;
+        const sw = sheet.w * scale;
+        const sh = sheet.h * scale;
+        const colorIdx = (sheet.col + sheet.row) % sheetColors.length;
+
+        svg.appendChild(svgEl('rect', {
+            x: sx, y: sy, width: sw, height: sh,
+            fill: sheetColors[colorIdx], stroke: '#2d8c4e', 'stroke-width': 1,
+            'stroke-dasharray': '6,3'
+        }));
+
+        // Номер листа
+        if (sw > 25 && sh > 25) {
+            const num = svgEl('text', {
+                x: sx + sw / 2, y: sy + sh / 2 + 4,
+                'text-anchor': 'middle', 'font-size': 10, 'font-weight': 700,
+                'font-family': 'Inter, sans-serif', fill: '#2d8c4e', opacity: 0.8
+            });
+            num.textContent = `#${sheet.idx}`;
+            svg.appendChild(num);
+        }
+    }
+
+    // === Анализ стыков ===
+    const warnings = [];
+    // Вертикальные стыки - берём из реальной раскладки (правые края листов, кроме последнего)
+    const jointPositions = [];
+    const seenJoints = new Set();
+    for (const sheet of sheetLayout) {
+        const rightEdge = Math.round(sheet.x + sheet.w);
+        if (rightEdge < wallLength && !seenJoints.has(rightEdge)) {
+            seenJoints.add(rightEdge);
+            jointPositions.push(rightEdge);
+        }
+    }
+    jointPositions.sort((a, b) => a - b);
+
+    // Информация о подрезке первого листа
+    if (sheathing.firstSheetWidth < sheetWidth) {
+        warnings.push(`Первый лист подрезан до ${sheathing.firstSheetWidth} мм для выравнивания стыков по стойкам`);
+    }
+
+    let allJointsOk = true;
+    const tolerance = 2; // допуск ±2мм
+    for (const jointX of jointPositions) {
+        // Проверим, попадает ли стык на середину стойки
+        let onStud = false;
+        let closestStudCenter = null;
+        let minDist = Infinity;
+        for (const studPos of studs) {
+            const studCenter = studPos + boardThickness / 2;
+            const dist = Math.abs(jointX - studCenter);
+            if (dist < minDist) {
+                minDist = dist;
+                closestStudCenter = studCenter;
+            }
+            // Стык попадает на середину стойки (с допуском)
+            if (dist <= tolerance) {
+                onStud = true;
+                break;
+            }
+        }
+
+        const px = oX + jointX * scale;
+        if (onStud) {
+            // Зеленая линия - стык на стойке
+            svg.appendChild(svgEl('line', {
+                x1: px, y1: oY, x2: px, y2: oY + sH,
+                stroke: '#27ae60', 'stroke-width': 2, opacity: 0.8
+            }));
+            const ok = svgEl('text', {
+                x: px, y: oY - 4, 'text-anchor': 'middle',
+                'font-size': 8, 'font-family': 'Inter, sans-serif',
+                fill: '#27ae60', 'font-weight': 600
+            });
+            ok.textContent = '✓';
+            svg.appendChild(ok);
+        } else {
+            allJointsOk = false;
+            // Красная линия - стык между стойками
+            svg.appendChild(svgEl('line', {
+                x1: px, y1: oY, x2: px, y2: oY + sH,
+                stroke: '#e74c3c', 'stroke-width': 2, 'stroke-dasharray': '4,2', opacity: 0.9
+            }));
+            const warn = svgEl('text', {
+                x: px, y: oY - 4, 'text-anchor': 'middle',
+                'font-size': 8, 'font-family': 'Inter, sans-serif',
+                fill: '#e74c3c', 'font-weight': 600
+            });
+            warn.textContent = '✗';
+            svg.appendChild(warn);
+
+            const distMm = Math.round(minDist);
+            warnings.push(`Стык на ${jointX} мм не попадает на середину стойки (ближайший центр стойки на ${Math.round(closestStudCenter)} мм, смещение ${distMm} мм)`);
+        }
+    }
+
+    if (!allJointsOk) {
+        const suggested = getSuggestedSpacings(sheetWidth, boardThickness);
+        if (suggested.length > 0) {
+            warnings.push(`Рекомендуемый просвет между стойками для листа ${sheetWidth} мм: ${suggested.join(', ')} мм`);
+        }
+    }
+
+    // Легенда внизу
+    const legendY = oY + sH + 18;
+    const legendItems = [
+        { color: '#27ae60', label: 'Стык на стойке' },
+        { color: '#e74c3c', label: 'Стык между стойками' },
+    ];
+    let lx = oX;
+    for (const item of legendItems) {
+        svg.appendChild(svgEl('line', {
+            x1: lx, y1: legendY, x2: lx + 14, y2: legendY,
+            stroke: item.color, 'stroke-width': 2
+        }));
+        const t = svgEl('text', {
+            x: lx + 18, y: legendY + 3,
+            'font-size': 9, 'font-family': 'Inter, sans-serif', fill: '#666'
+        });
+        t.textContent = item.label;
+        svg.appendChild(t);
+        lx += item.label.length * 6 + 35;
+    }
+
+    return { svg, warnings };
+}
+
+
+// ============================================================
 // Модуль сметы
 // ============================================================
 
@@ -1218,36 +1709,52 @@ function renderCuttingPlan(result) {
  * @param {number} boardPrice - стоимость одной 6м доски
  * @returns {string} HTML
  */
-function renderEstimate(result, boardPrice) {
+function renderEstimate(result, boardPrice, sheetPrice) {
     const {
         studBoards, plateBoards, rigelBoards, openingBoards, totalBoards,
         nailsWithReserve, nailLength, nailsWeightKg,
-        boardThickness, boardWidth
+        boardThickness, boardWidth,
+        sheathing
     } = result;
 
     const rows = [];
     let total = 0;
 
-    if (studBoards > 0) {
+    if (studBoards > 0 && boardPrice > 0) {
         const cost = studBoards * boardPrice;
         total += cost;
         rows.push({ name: `Доска на стойки (${boardThickness}x${boardWidth}x6000)`, qty: studBoards, unit: 'шт', price: boardPrice, cost });
     }
-    if (plateBoards > 0) {
+    if (plateBoards > 0 && boardPrice > 0) {
         const cost = plateBoards * boardPrice;
         total += cost;
         rows.push({ name: `Доска на обвязку (${boardThickness}x${boardWidth}x6000)`, qty: plateBoards, unit: 'шт', price: boardPrice, cost });
     }
-    if (rigelBoards > 0) {
+    if (rigelBoards > 0 && boardPrice > 0) {
         const cost = rigelBoards * boardPrice;
         total += cost;
         rows.push({ name: `Доска на ригель стены (${boardThickness}x${boardWidth}x6000)`, qty: rigelBoards, unit: 'шт', price: boardPrice, cost });
     }
-    if (openingBoards > 0) {
+    if (openingBoards > 0 && boardPrice > 0) {
         const cost = openingBoards * boardPrice;
         total += cost;
         rows.push({ name: `Доска на проёмы (${boardThickness}x${boardWidth}x6000)`, qty: openingBoards, unit: 'шт', price: boardPrice, cost });
     }
+
+    // Обшивка
+    if (sheathing && sheetPrice > 0) {
+        const cost = sheathing.sheetCount * sheetPrice;
+        total += cost;
+        rows.push({
+            name: `${sheathing.name} (${sheathing.sheetHeight}x${sheathing.sheetWidth})`,
+            qty: sheathing.sheetCount,
+            unit: 'лист',
+            price: sheetPrice,
+            cost
+        });
+    }
+
+    if (rows.length === 0) return '';
 
     return `
         <h3 class="drawing-legend__title">Смета</h3>
@@ -1274,8 +1781,8 @@ function renderEstimate(result, boardPrice) {
             </tbody>
             <tfoot>
                 <tr>
-                    <td colspan="2"><strong>Всего досок: ${totalBoards} шт.</strong></td>
-                    <td colspan="3"><strong>Итого: ${total.toLocaleString('ru-RU')} ₽</strong></td>
+                    <td colspan="4"><strong>Итого:</strong></td>
+                    <td><strong>${total.toLocaleString('ru-RU')} ₽</strong></td>
                 </tr>
             </tfoot>
         </table>
@@ -1298,6 +1805,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // Начальный плейсхолдер
     updateOpeningsPlaceholder();
 
+    // Toggle полей обшивки
+    const sheathingCheckbox = document.getElementById('hasSheathing');
+    const sheathingFields = document.getElementById('sheathingFields');
+    sheathingCheckbox.addEventListener('change', () => {
+        sheathingFields.style.display = sheathingCheckbox.checked ? '' : 'none';
+    });
+
     // Добавление проёма
     addOpeningBtn.addEventListener('click', () => {
         const opening = {
@@ -1317,6 +1831,8 @@ document.addEventListener('DOMContentLoaded', () => {
     form.addEventListener('submit', (e) => {
         e.preventDefault();
 
+        const hasSheathing = sheathingCheckbox.checked;
+
         const params = {
             wallLength: parseInt(document.getElementById('wallLength').value, 10),
             wallHeight: parseInt(document.getElementById('wallHeight').value, 10),
@@ -1326,6 +1842,11 @@ document.addEventListener('DOMContentLoaded', () => {
             doubleTopPlate: document.getElementById('doubleTopPlate').checked,
             hasRigel: document.getElementById('hasRigel').checked,
             openings: openings,
+            // Обшивка
+            hasSheathing,
+            sheetName: hasSheathing ? document.getElementById('sheetName').value.trim() : '',
+            sheetHeight: hasSheathing ? parseInt(document.getElementById('sheetHeight').value, 10) : 0,
+            sheetWidth: hasSheathing ? parseInt(document.getElementById('sheetWidth').value, 10) : 0,
         };
 
         // Валидация
@@ -1353,6 +1874,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // Расчёт
         const result = calculateWall(params);
 
+
+
         // SVG чертёж
         drawingContainer.innerHTML = '';
         const svg = renderWallSVG(result);
@@ -1369,14 +1892,62 @@ document.addEventListener('DOMContentLoaded', () => {
             cuttingContainer.style.display = 'none';
         }
 
+        // Раскрой обшивки
+        const sheathingLayoutContainer = document.getElementById('sheathingLayoutContainer');
+        sheathingLayoutContainer.innerHTML = '';
+        const sheathingSvg = renderSheathingLayout(result);
+        if (sheathingSvg) {
+            sheathingLayoutContainer.appendChild(sheathingSvg);
+            sheathingLayoutContainer.style.display = 'block';
+        } else {
+            sheathingLayoutContainer.style.display = 'none';
+        }
+
+        // Наложение обшивки на каркас
+        const sheathingOnFrameContainer = document.getElementById('sheathingOnFrameContainer');
+        const sheathingWarnings = document.getElementById('sheathingWarnings');
+        sheathingOnFrameContainer.innerHTML = '';
+        sheathingWarnings.innerHTML = '';
+        const frameResult = renderSheathingOnFrame(result);
+        if (frameResult) {
+            sheathingOnFrameContainer.appendChild(frameResult.svg);
+            sheathingOnFrameContainer.style.display = 'block';
+
+            let warningsHtml = '';
+
+
+
+            // Предупреждения о стыках
+            if (frameResult.warnings.length > 0) {
+                warningsHtml += `
+                    <h3 class="drawing-legend__title" style="color: #c0392b;">⚠ Предупреждения по обшивке</h3>
+                    <ul class="drawing-legend__list">
+                        ${frameResult.warnings.map(w => `<li style="color:#c0392b;">${w}</li>`).join('')}
+                    </ul>
+                `;
+            }
+
+            if (warningsHtml) {
+                sheathingWarnings.innerHTML = warningsHtml;
+                sheathingWarnings.style.display = 'block';
+            } else {
+                sheathingWarnings.style.display = 'none';
+            }
+        } else {
+            sheathingOnFrameContainer.style.display = 'none';
+            sheathingWarnings.style.display = 'none';
+        }
+
         // Спецификация
         specContainer.innerHTML = renderSpec(result);
 
-        // Смета (если указана стоимость)
+        // Смета (если указана хотя бы одна стоимость)
         const estimateContainer = document.getElementById('estimateContainer');
-        const boardPrice = parseInt(document.getElementById('boardPrice').value, 10);
-        if (boardPrice > 0) {
-            estimateContainer.innerHTML = renderEstimate(result, boardPrice);
+        const boardPrice = parseInt(document.getElementById('boardPrice').value, 10) || 0;
+        const sheetPrice = hasSheathing ? (parseInt(document.getElementById('sheetPrice').value, 10) || 0) : 0;
+        const estimateHtml = renderEstimate(result, boardPrice, sheetPrice);
+        if (estimateHtml) {
+            estimateContainer.innerHTML = estimateHtml;
             estimateContainer.style.display = 'block';
         } else {
             estimateContainer.style.display = 'none';

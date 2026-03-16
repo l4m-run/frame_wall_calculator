@@ -30,8 +30,8 @@
                         <input class="form__input" type="number" id="wallHeight" value="2800" min="500" step="1" required>
                     </div>
                     <div class="form__group">
-                        <label class="form__label" for="studSpacing">Шаг стоек, мм</label>
-                        <input class="form__input" type="number" id="studSpacing" value="575" min="100" step="1" required>
+                        <label class="form__label" for="studSpacing">Шаг стоек (просвет), мм</label>
+                        <input class="form__input" type="number" id="studSpacing" value="525" min="100" step="1" required>
                     </div>
                     <div class="form__group">
                         <label class="form__label" for="boardWidth">Ширина доски, мм</label>
@@ -52,6 +52,30 @@
                             <input class="form__checkbox" type="checkbox" id="hasRigel">
                             <span>Ригель</span>
                         </label>
+                    </div>
+                    <div class="form__group form__group--checkbox">
+                        <label class="form__checkbox-label">
+                            <input class="form__checkbox" type="checkbox" id="hasSheathing">
+                            <span>Обшивка листовым материалом</span>
+                        </label>
+                    </div>
+                    <div class="sheathing-fields" id="sheathingFields" style="display:none;">
+                        <div class="form__group">
+                            <label class="form__label" for="sheetName">Название материала</label>
+                            <input class="form__input" type="text" id="sheetName" value="ОСБ">
+                        </div>
+                        <div class="form__group">
+                            <label class="form__label" for="sheetHeight">Высота листа, мм</label>
+                            <input class="form__input" type="number" id="sheetHeight" value="2500" min="100" step="1">
+                        </div>
+                        <div class="form__group">
+                            <label class="form__label" for="sheetWidth">Ширина листа, мм</label>
+                            <input class="form__input" type="number" id="sheetWidth" value="1250" min="100" step="1">
+                        </div>
+                        <div class="form__group">
+                            <label class="form__label" for="sheetPrice">Стоимость листа, ₽ (опционально)</label>
+                            <input class="form__input" type="number" id="sheetPrice" value="" min="0" step="1" placeholder="не указана">
+                        </div>
                     </div>
                     <div class="form__group">
                         <label class="form__label" for="boardPrice">Стоимость доски 6м, ₽ (опционально)</label>
@@ -88,6 +112,11 @@
                 </div>
 
                 <div class="drawing-container" id="cuttingContainer" style="display:none;"></div>
+
+                <div class="drawing-container" id="sheathingLayoutContainer" style="display:none;"></div>
+
+                <div class="drawing-container" id="sheathingOnFrameContainer" style="display:none;"></div>
+                <div class="drawing-legend" id="sheathingWarnings" style="display:none;"></div>
 
                 <div id="estimateContainer" style="display:none;"></div>
 
